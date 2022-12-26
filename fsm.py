@@ -3,7 +3,9 @@ from transitions.extensions import GraphMachine
 class TocMachine(GraphMachine):
     def __init__(self, **machine_configs):
         self.machine = GraphMachine(model=self, **machine_configs)
-    
+    def is_going_to_name(self,event):
+        text = event.message.text
+        return text.lower() == "go to name"
     def is_going_to_weather(self, event):
         text = event.message.text
         return text.lower() == "go to weather"
@@ -24,3 +26,5 @@ class TocMachine(GraphMachine):
 
     def on_exit_city(self):
         print("Leaving city")
+    def on_exit_name(self):
+        print("Leaving name")

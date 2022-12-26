@@ -12,11 +12,11 @@ from linebot.models import *
 import re
 import json,requests
 import random
+
+
 from fsm import TocMachine
 import os
 load_dotenv()
-
-
 machine = TocMachine(
     states=["idle", "weather", "city"],
     transitions=[
@@ -25,6 +25,12 @@ machine = TocMachine(
             "source": "idle",
             "dest": "weather",
             "conditions": "is_going_to_weather",
+        },
+        {
+            "trigger": "advance",
+            "source": "fortune",
+            "dest": "name",
+            "conditions": "is_going_to_fortune",
         },
         {  "trigger": "advance",
             "source": "weather",
@@ -36,7 +42,7 @@ machine = TocMachine(
             "dest" : "fortune",
             "conditions":"is_going_to_fortune"
         },
-        {"trigger": "go_back", "source": ["weather", "city", "fortune"], "dest": "idle"},
+        {"trigger": "go_back", "source": ["weather", "city", "fortune","name"], "dest": "idle"},
     ],
     initial="idle",
     auto_transitions=False,
@@ -53,7 +59,8 @@ handler = WebhookHandler(channel_secret)
 
 region=""
 state="idle"
-
+name = ""
+sign = ""
 # 監聽所有來自 /callback 的 Post Request
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -84,19 +91,19 @@ def get(city):
     return res
 
 #訊息傳遞區塊
-line_bot_api.push_message('Uc58783194ae42125c3e691cbeedb84b1', TextSendMessage(text='美好的一天從現在開始!\n想知道甚麼資訊呢?\n輸入:\n 天氣\n 運勢\n 試試看吧!'))
+line_bot_api.push_message('Uc58783194ae42125c3e691cbeedb84b1', TextSendMessage(text='美好的一天從現在開始!\n想知道甚麼資訊呢?\n輸入:\n 天氣(提供未來36小時之預報~\n 運勢(抽個大吉!開心一下!\n 試試看吧!'))
 
 ##### 基本上程式編輯都在這個function #####
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    global state,region
+    global state,region,name,sign
     
     reply_token = event.reply_token
     message =text= event.message.text
+        
     if re.match(message, '天氣') or re.match(state,'weather')or re.match(state,'city'):
         if re.match(state,'idle'):
             state="weather"
-          
             line_bot_api.reply_message(reply_token,TextSendMessage(text='選擇地區:\n 北部\n 中部\n 南部\n 東部\n 外島'))
         elif re.match(state,'weather'):
             if re.match(message, '北部'):
@@ -163,17 +170,31 @@ def handle_message(event):
                     
                    
             else: 
-                    line_bot_api.reply_message(reply_token, TextSendMessage(text="尚未選擇縣市，重新輸入:\n 天氣\n 運勢")) 
-                    region=""
-                    state="idle"
-    elif re.match(message,'運勢'):
-        fortune = random.choice(['大凶', '凶', '末吉', '吉','中吉','大吉'])
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text="今日運勢: "+fortune))  
+                line_bot_api.reply_message(reply_token, TextSendMessage(text="尚未選擇縣市，重新輸入:\n 天氣\n 運勢")) 
+                region=""
+                state="idle"
+    elif re.match(message,'運勢') or re.match(state,'fortune') or re.match(state,'name'):
+            
+        if re.match(state,'fortune') :
+            state = 'name'
+            name = message
+            line_bot_api.reply_message(reply_token,TextSendMessage(text='請輸入您的星座'))
+        elif re.match(state,'name') :
+            state = 'idle'
+            sign = message
+            fortune = random.choice(['大凶', '凶', '末吉', '吉','小吉','中吉','大吉'])
+            line_bot_api.reply_message(reply_token,TextSendMessage(text='經過我深思熟慮後，{}的{}，其運勢為:{}'.format(sign,name,fortune)))
+        elif re.match(state,'idle'):
+            name=sign=""
+            state = "fortune"
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="我將為您抽取一張運勢卡片，請問您的名字是?"))  
+        else:
+            state = 'idle'
+            line_bot_api.reply_message(reply_token,TextSendMessage(text='請重新輸入:\n 天氣\n 運勢'))
     else :
-        
-            state = "idle"
-            region=""
-            line_bot_api.reply_message(reply_token,TextSendMessage(text='輸入錯誤! 請重新輸入:\n 天氣\n 運勢'))
+        state = "idle"
+        region=""
+        line_bot_api.reply_message(reply_token,TextSendMessage(text='請重新輸入:\n 天氣\n 運勢'))
 
 @app.route("/show_fsm", methods=['POST'])            
 def show_fsm():
